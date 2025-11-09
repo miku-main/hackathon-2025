@@ -14,7 +14,7 @@ import pandas as pd
 import requests
 
 # Base URL for the vlrggapi project (from the GitHub README)
-VLRGG_BASE_URL = "https://vlrggapi.vercel.app"
+VLRGG_BASE_URL = "http://ec2-34-230-77-141.compute-1.amazonaws.com:3001"
 
 # Modeling assumption:
 # - A typical Valorant pro map runs ~22 rounds (e.g., 13–9, 13–10, etc.).

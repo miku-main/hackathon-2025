@@ -44,6 +44,7 @@ class PickResult:
     recommendation: str  # "Lean Over", "Lean Under", "Stay Away"
     confidence: str      # "Low", "Medium", "High"
     explanation: str
+    raw_player: Dict[str, Any]   # <— NEW
 
 
 # ---------- Projection logic ----------
@@ -367,6 +368,7 @@ def build_picks(region: str, timespan: str, risk_mode: RiskMode) -> List[PickRes
                     recommendation=rec,
                     confidence=conf,
                     explanation=explanation,
+                    raw_player=player,         # <— NEW: full stats dict to feed ChatGPT
                 )
             )
 

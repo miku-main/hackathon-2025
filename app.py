@@ -18,6 +18,8 @@ import pandas as pd
 import streamlit as st
 
 from engine.pick_engine import build_picks, RiskMode
+from engine import ai_explainer
+
 
 
 # Configure basic Streamlit page layout
@@ -234,6 +236,10 @@ filtered_picks = [
 if not filtered_picks:
     st.warning("No picks match your filters. Try lowering confidence or changing risk/region.")
     st.stop()
+    
+# Make sure we have somewhere to store per-pick chat history
+if "chat_state" not in st.session_state:
+    st.session_state["chat_state"] = {}
 
 # ---------- Badges & top-level metrics ----------
 
@@ -363,13 +369,24 @@ with tab_table:
 with tab_explain:
     st.markdown("#### Individual AI breakdowns")
 
-    # One expander per pick, with the full explanation text
+    # One expander per pick, with an AI-generated explanation and follow-up Q&A
     for p in filtered_picks:
         label = (
             f"{p.player_handle} – {p.stat_type.upper()} "
             f"({p.recommendation}, {p.confidence}, edge {p.edge:.2f})"
         )
+
+        # Key to identify this pick's chat thread
+        pick_key = f"{p.player_handle}-{p.stat_type}"
+
+        # Ensure chat_state entry exists
+        chat_state = st.session_state["chat_state"].setdefault(
+            pick_key,
+            {"initial": None, "history": []},
+        )
+
         with st.expander(label):
+            # Basic numeric info
             st.write(f"**Team:** {p.team_name}")
             st.write(f"**Role:** {p.role or 'Unknown'}")
             st.write(
@@ -378,10 +395,53 @@ with tab_explain:
                 f"**Edge:** {p.edge:.2f} | "
                 f"**P(Over):** {p.probability_over*100:.1f}%"
             )
-            st.write(p.explanation)
+
+            # 1) Initial AI breakdown (only generated once per pick)
+            if chat_state["initial"] is None:
+                with st.spinner("Asking VALCoach for an explanation..."):
+                    explanation = ai_explainer.generate_initial_explanation(p)
+                chat_state["initial"] = explanation
+
+            st.markdown("### 🧠 AI Breakdown")
+            st.write(chat_state["initial"])
+
+            # 2) Show previous follow-up Q&A, if any
+            if chat_state["history"]:
+                st.markdown("### 💬 Follow-up Q&A")
+                for turn in chat_state["history"]:
+                    if turn["role"] == "user":
+                        st.markdown(f"**You:** {turn['content']}")
+                    else:
+                        st.markdown(f"> **VALCoach:** {turn['content']}")
+
+            # 3) Follow-up question input
+            st.markdown("#### Ask a follow-up")
+            q = st.text_input(
+                f"Question about {p.player_handle} ({p.stat_type})",
+                placeholder="e.g. What does KAST stand for? Why is this edge big?",
+                key=f"followup-input-{pick_key}",
+            )
+
+            ask_clicked = st.button("Ask VALCoach", key=f"followup-btn-{pick_key}")
+
+            if ask_clicked and q:
+                # Add user question to history
+                chat_state["history"].append({"role": "user", "content": q})
+
+                with st.spinner("VALCoach is thinking..."):
+                    answer = ai_explainer.answer_followup(
+                        p,
+                        chat_state["history"],
+                    )
+
+                chat_state["history"].append(
+                    {"role": "assistant", "content": answer}
+                )
+
+                # Clear the text input
+                st.session_state[f"followup-input-{pick_key}"] = ""
 
 # Footer disclaimer
 st.caption(
     "Hackathon prototype for a PrizePicks-style track. Uses vlrggapi for stats. "
-    "Not affiliated with Riot Games, VLR, or PrizePicks. Not betting advice."
 )
